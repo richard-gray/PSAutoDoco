@@ -60,8 +60,8 @@ $AWSBucket = "tddocumentation"
 Function Setup-Package {
     #Set Console Window Title
     $WindowTitle = (Get-Host).UI.RawUI
-    $WindowTitle.WindowTitle = "$ScriptName Script - Thomas Duryea Consulting"
-    Write-Host "$ScriptName Script - Thomas Duryea Consulting"
+    $WindowTitle.WindowTitle = "$ScriptName Script"
+    Write-Host "$ScriptName Script"
     write-host "https://github.com/PSAutoDoco/PSAutoDoco"
     #Get ClientName if not set
     if(!$ClientName){
