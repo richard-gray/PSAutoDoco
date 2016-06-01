@@ -48,13 +48,17 @@ PowerShell Documentation Automation Script.
 Function New-Package {
     Param(
         [parameter(Mandatory=$True)][string]$ScriptName,
-        [parameter(Mandatory=$True)][string]$ClientName
+        [parameter(Mandatory=$True)][string]$ClientName,
+        [string]$Offline
     )
     #Set Console Window Title
     $WindowTitle = (Get-Host).UI.RawUI
     $WindowTitle.WindowTitle = "$ScriptName Script"
     Write-Host "$ScriptName Script" -ForegroundColor Magenta
     write-host "https://github.com/PSAutoDoco/PSAutoDoco"
+    if($Offline -eq $tue){
+        Write-Host "OFFLINE MODE" -ForegroundColor Magenta
+    }
     #Check ClientName
     if($ClientName -notmatch "^[a-zA-Z0-9]+$"){
         Write-Host "Invalid Client Name!" -ForegroundColor Red
@@ -87,7 +91,7 @@ Function Add-Capture{
     )
     #Export CLI XML into Package Directory
     Write-host "Exporting CLI XML for $CaptureName..." -NoNewline
-    $input | Export-Clixml -Path "$PackageDirectory\$CaptureName.xml" 
+    $input | Export-Clixml -Path "$PackageDirectory\$CaptureName" 
     Write-Host "Done" -ForegroundColor Green
 }
 Export-ModuleMember -Function Add-Capture
@@ -95,39 +99,64 @@ Export-ModuleMember -Function Add-Capture
 #Submit Packages to S3 for archive/processing
 Function Submit-Package {
     Param(
-        [parameter(Mandatory=$True)][string]$AccessKey,
-        [parameter(Mandatory=$True)][string]$SecretKey,
-        [parameter(Mandatory=$True)][string]$AWSBucket,
-        [bool]$RemovePackageDirectory=$true,
-        [bool]$RemovePackageZip=$true
+        [string]$AccessKey="",
+        [string]$SecretKey="",
+        [string]$AWSBucket="",
+        [string]$Offline=$false,
+        [bool]$RemovePackageDirectory=$false,
+        [bool]$RemovePackageZip=$false
+
     )
     #Zip the Package Directory
     Write-Host "Zipping Package..." -NoNewline
     Add-Type -assembly "system.io.compression.filesystem"
     [io.compression.zipfile]::CreateFromDirectory($PackageDirectory,$PackageZip)
     Write-Host "Done" -ForegroundColor Green
+    #Test Internet Connectivity
+    #Test-Connection
+
     #Upload the Zipped Package to S3
     Write-Host "Uploading to S3..." -NoNewline
-    Write-S3Object -BucketName $AWSBucket -File $PackageZip -Key $PackageName -AccessKey $AccessKey -SecretKey $SecretKey
-    Write-Host "Done" -ForegroundColor Green
+    If($offline -eq $false){
+        if($AccessKey -eq ""){
+            do{
+                $AccessKey = Read-host "Enter AWS Access Key"
+            }until($AccessKey -ne "")
+        }    
+        if($SecretKey -eq ""){
+            do{
+                $SecretKey = Read-host "Enter AWS Secret Key"
+           } until($SecretKey -ne "")
+        } 
+        if($AWSBucket -eq ""){
+            do{
+                $AWSBucket = Read-host "Enter AWS Bucket Name"
+           } until($AWSBucket -ne "")
+        } 
+        Write-S3Object -BucketName $AWSBucket -File $PackageZip -Key $PackageName -AccessKey $AccessKey -SecretKey $SecretKey
+        Write-Host "Done" -ForegroundColor Green
+    }else{
+        Write-Host "Skipping" -ForegroundColor Yellow
+    }
     Write-host "Removing Package Directory..." -NoNewline
-    If($RemovePackageDirectory -eq $true){
-            Remove-Item $PackageDirectory -Force -Recurse
+    If(($RemovePackageDirectory -eq $true) -or ($Offline -eq $false)){
+        Remove-Item $PackageDirectory -Force -Recurse
         Write-host "Done" -ForegroundColor Green
     }else{
         Write-Host "Skipping" -ForegroundColor Yellow
     }    
     Write-host "Removing Zip..." -NoNewline
-    If($RemovePackageZip -eq $true){
+    If(($RemovePackageZip -eq $true) -or ($Offline -eq $false)){
         Remove-Item $PackageZip
         Write-host "Done" -ForegroundColor Green
     }else{
         Write-Host "Skipping" -ForegroundColor Yellow
     }
     Write-Host "Package Name [ " -NoNewline
-    Write-Host $PackageName -NoNewline -ForegroundColor Green
+    Write-Host $script:PackageName -NoNewline -ForegroundColor Green
     Write-Host " ]"
     Write-Host "Package Submited"
+    return $script:PackageName
 }
 Export-ModuleMember -Function Submit-Package
 #endregion
