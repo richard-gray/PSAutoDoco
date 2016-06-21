@@ -42,26 +42,33 @@
 #endregion
 
 #region Script Parameters
+Param(
+    [string]$ClientName=(Read-Host "Enter Client Name"),
+    [string]$Report=(Read-Host "Enter Report Name"),
+    [string]$Offline=$false,
+    [string]$AccessKey="",
+    [string]$SecretKey="",
+    [string]$AWSBucket=""
+)
 
 #endregion
 
 #region AWS Keys
-$AccessKey = "AKIAJLHBXAPFEMLOGYQQ"
-$SecrectKey = "CYKbGK0B9rcZapHoYWYMDWraiPVy5DJo2NizKWHM"
-
+#Import of AWS Keys for Testing
+Import-Module C:\temp\AWSCreds.psm1
+$AccessKey = Get-AccessKey
+$SecretKey = Get-SecretKey
+$AWSBucket = Get-AWSBucket
 #endregion
 
-
-$AWSBucket = "tddocumentation"
 #$Report = Read-Host "Enter your Report Name"
-$Report = "Richard-ExampleScriptProcessing-636003699946451955"
 $Path = (Get-Location).Path 
 $ReportDirectory = $Path + "\" + $Report
 $ReportZip = $ReportDirectory + ".zip"
 
-#Read-S3Object -BucketName $AWSBucket -Key $Report -File $ReportZip -AccessKey $AccessKey -SecretKey $SecrectKey
-#Add-Type -assembly "system.io.compression.filesystem"
-#[io.compression.zipfile]::ExtractToDirectory($ReportZip,$ReportDirectory)
+$Download = Read-S3Object -BucketName $AWSBucket -Key $Report -File $ReportZip -AccessKey $AccessKey -SecretKey $SecretKey
+Add-Type -assembly "system.io.compression.filesystem"
+[io.compression.zipfile]::ExtractToDirectory($ReportZip,$ReportDirectory)
 
 
 $TableNumber = 0
@@ -325,9 +332,9 @@ $script:ReportHead = "<html>
 <body>
 "
 
-$script:ReportTableOfContents += "
-<h1>Table of Contents</h1>
-<ul>"
+#$script:ReportTableOfContents += "
+#<h1>Table of Contents</h1>
+#<ul>"
 
 function Add-TitleTableofContents(){
     Param(
@@ -494,17 +501,27 @@ $ReportBody += "
 #Add-TitleTableofContents -Finish $true
 
 #Remove Local Files
-Write-Host "Removing Local Files..." -NoNewline
-#Remove-Item $ReportDirectory -Force -Recurse
-#Remove-Item $ReportZip
-Write-Host "Done" -ForegroundColor Green
-
+Write-Host "Removing Directory..." -NoNewline
+If(($RemovePackageDirectory -eq $true) -or ($Offline -eq $false)){
+    Remove-Item $ReportDirectory -Force -Recurse
+    Write-host "Done" -ForegroundColor Green
+}else{
+    Write-Host "Skipping" -ForegroundColor Yellow
+}    
+Write-host "Removing Zip files..." -NoNewline
+If(($RemovePackageZip -eq $true) -or ($Offline -eq $false)){
+    Remove-Item $ReportZip
+    Write-host "Done" -ForegroundColor Green
+}else{
+    Write-Host "Skipping" -ForegroundColor Yellow
+}    
 #Combine Sections and Save
 Write-Host "Saving Report..." -NoNewline
-$ReportHead + $ReportTableOfContents + $ReportBody | Out-File "$Report.html"
+#$ReportTableOfContents
+$ReportHead +   $ReportBody | Out-File "$Report.html"
 Write-Host "Done" -ForegroundColor Green
 Write-Host "Report Name [ " -NoNewline
-Write-Host "$Report.html" -NoNewline -ForegroundColor Green
+Write-Host "$Report.html" -NoNewline -ForegroundColor Yellow
 Write-Host " ]"
 Write-Host "Script complete"
 

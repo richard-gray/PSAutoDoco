@@ -91,7 +91,7 @@ Function Add-Capture{
     )
     #Export CLI XML into Package Directory
     Write-host "Exporting CLI XML for $CaptureName..." -NoNewline
-    $input | Export-Clixml -Path "$PackageDirectory\$CaptureName" 
+    $input | Export-Clixml -Path "$PackageDirectory\$CaptureName" -Depth 10
     Write-Host "Done" -ForegroundColor Green
 }
 Export-ModuleMember -Function Add-Capture
@@ -153,7 +153,7 @@ Function Submit-Package {
         Write-Host "Skipping" -ForegroundColor Yellow
     }
     Write-Host "Package Name [ " -NoNewline
-    Write-Host $script:PackageName -NoNewline -ForegroundColor Green
+    Write-Host $script:PackageName -NoNewline -ForegroundColor Yellow
     Write-Host " ]"
     Write-Host "Package Submited"
     return $script:PackageName
