@@ -29,8 +29,6 @@
 .VERSION 1.0 - 27/05/2016
     Contributors: Richard Gray
     -Initial Build
-
-
 #>
 
 #endregion
@@ -56,15 +54,17 @@ Function New-Report {
     }
     Write-Host "Setting Up Report..." -NoNewline
     #Get ticks as a time stamp for Package
-    $Script:Ticks = (Get-Date).Ticks
+    $Ticks = (Get-Date).Ticks
     #Create the name of the Package using the Client Name, Script Name, and Ticks
-    $Script:ReportName = $ClientName + "-" + $ScriptName + "-" + $Ticks
-    $Script:ReportDirectory = (Get-Location).Path + "\$ReportName"
-    $Script:ReportZip = $Script:ReportDirectory + ".zip"
+    $script:ReportName = $ClientName + "-" + $ScriptName + "-" + $Ticks
+    $script:ReportDirectory = (Get-Location).Path + "\$script:ReportName"
+    $script:ReportZip = $Script:ReportDirectory + ".zip"
     #Create Package Directory
-    $Script:Setup = (New-Item $ReportDirectory -ItemType Directory)
-    "File, Type, Title, Description, Caption, CustomCSS, Level, Language" | Out-file -FilePath "$ReportDirectory\0.csv"
+    $Setup = (New-Item $script:ReportDirectory -ItemType Directory)
+    "File, Type, Title, Description, Caption, CustomCSS, Level, Language" | Out-file -FilePath "$script:ReportDirectory\0.csv"
     Write-Host "Done" -ForegroundColor Green
+    Write-host $script:ReportName
+    return $script:ReportName
 }
 Export-ModuleMember -Function New-Report
 
@@ -74,15 +74,22 @@ Function Submit-Report {
         [string]$AccessKey="",
         [string]$SecretKey="",
         [string]$AWSBucket="",
+        [string]$Package="",
+        [string]$Report="",
         [string]$Offline=$false,
         [bool]$RemoveDirectory=$true,
         [bool]$RemoveZip=$true
 
     )
+    $script:Path = (Get-Location).Path + "\"
+    $script:PackageDirectory = $script:Path + $Package
+    $script:PackageZip = $script:PackageDirectory + ".zip"
+    $script:ReportDirectory = $script:Path + $Report
+    $script:ReportZip = $script:ReportDirectory + ".zip"    
     #Zip the Package Directory
     Write-Host "Zipping Report..." -NoNewline
     Add-Type -assembly "system.io.compression.filesystem"
-    [io.compression.zipfile]::CreateFromDirectory($ReportDirectory,$ReportZip)
+    $Extract = [io.compression.zipfile]::CreateFromDirectory($script:ReportDirectory,$script:ReportZip)
     Write-Host "Done" -ForegroundColor Green
     #Upload the Zipped Package to S3
     Write-Host "Uploading to S3..." -NoNewline
@@ -102,32 +109,31 @@ Function Submit-Report {
                 $AWSBucket = Read-host "Enter AWS Bucket Name"
            } until($AWSBucket -ne "")
         } 
-        Write-S3Object -BucketName $AWSBucket -File $ReportZip -Key $ReportName -AccessKey $AccessKey -SecretKey $SecrectKey
+        Write-S3Object -BucketName $AWSBucket -File $script:ReportZip -Key $Report -AccessKey $AccessKey -SecretKey $SecretKey
         Write-Host "Done" -ForegroundColor Green   
     }else{
         Write-Host "Skipping" -ForegroundColor Yellow
     }
     Write-host "Removing Directories..." -NoNewline
-    If(($RemovePackageDirectory -eq $true) -or ($Offline -eq $false)){
-        Remove-Item $PackageDirectory -Force -Recurse
-        Remove-Item $ReportDirectory -Force -Recurse
+    If(($script:RemovePackageDirectory -eq $true) -or ($Offline -eq $false)){
+        Remove-Item $script:PackageDirectory -Force -Recurse
+        Remove-Item $script:ReportDirectory -Force -Recurse
         Write-host "Done" -ForegroundColor Green
     }else{
         Write-Host "Skipping" -ForegroundColor Yellow
     }    
     Write-host "Removing Zip files..." -NoNewline
-    If(($RemovePackageZip -eq $true) -or ($Offline -eq $false)){
-        Remove-Item $PackageZip
-        Remove-Item $ReportZip
+    If(($script:RemovePackageZip -eq $true) -or ($Offline -eq $false)){
+        Remove-Item $script:PackageZip
+        Remove-Item $script:ReportZip
         Write-host "Done" -ForegroundColor Green
     }else{
         Write-Host "Skipping" -ForegroundColor Yellow
     }    
     Write-Host "Report Name [ " -NoNewline
-    Write-Host $ReportName -NoNewline -ForegroundColor Green
+    Write-Host $Report -NoNewline -ForegroundColor Yellow
     Write-Host " ]"
     Write-Host "Script Complete"
-    Return $ReportName
 }
 Export-ModuleMember -Function Submit-Report
 
@@ -144,8 +150,8 @@ Function Add-Metadata{
         [string]$Language=""
     )
     "$File, $Type, $Title, $Description, $Caption, $CustomCSS, $Level, $Language" | Out-File -FilePath "$ReportDirectory\0.csv" -Append
+    Write-Host "." -NoNewline
 }
-
 
 #Add Title to the Report
 Function Add-Title{
@@ -154,10 +160,10 @@ Function Add-Title{
         [string]$Level=1,
         [string]$CustomCSS=""
     )
-    Write-Host "Adding Title..." -NoNewline
     $script:index++
+    Write-Host "[$script:index]Adding Title..." -NoNewline
     Add-Metadata -File "$index.txt" -Type "Title" -CustomCSS $CustomCSS -Level $Level
-    $Title | Out-File -FilePath "$ReportDirectory\$index.txt"
+    $Title | Out-File -FilePath "$script:ReportDirectory\$index.txt"
     Write-Host "Done" -ForegroundColor Green
 }
 Export-ModuleMember -Function Add-Title
@@ -170,10 +176,10 @@ Function Add-Paragraph{
         [string]$Level=1,
         [string]$CustomCSS=""
     )
-    Write-Host "Adding Paragraph..." -NoNewline
     $script:index++
+    Write-Host "[$script:index]Adding Paragraph..." -NoNewline
     Add-Metadata -File "$index.txt" -Type "Paragraph" -CustomCSS $CustomCSS -Level $Level -Title $Title
-    $Paragraph | Out-File -FilePath "$ReportDirectory\$index.txt"
+    $Paragraph | Out-File -FilePath "$script:ReportDirectory\$index.txt"
     Write-Host "Done" -ForegroundColor Green
 }
 Export-ModuleMember -Function Add-Paragraph
@@ -181,17 +187,26 @@ Export-ModuleMember -Function Add-Paragraph
 #Adds a Table to the Report
 Function Add-Table{
     Param(
+        [parameter(ValueFromPipeline=$true)]$Table,
         [string]$Title="",
         [string]$Level=1,
         [string]$Description="",
         [string]$Caption="",
         [string]$CustomCSS=""
     )    
-    Write-Host "Adding Table..." -NoNewline
-    $script:index++
-    Add-Metadata -File "$index.csv" -Type "Table" -Title $Title -Caption $Caption -CustomCSS $CustomCSS -Level $Level -Description $Description
-    $input | ConvertTo-Csv -NoTypeInformation | Out-File -FilePath "$ReportDirectory\$index.csv"
-    Write-Host "Done" -ForegroundColor Green
+    Begin {
+        $script:index++
+        Write-Host "[$script:index]Adding Table..." -NoNewline
+        $container = @()
+    }
+    Process {
+        $container += $Table
+    }
+    End{
+        Add-Metadata -File "$index.csv" -Type "Table" -Title $Title -Caption $Caption -CustomCSS $CustomCSS -Level $Level -Description $Description
+        $container | ConvertTo-Csv -NoTypeInformation | Out-File -FilePath "$script:ReportDirectory\$index.csv"
+        Write-Host "Done" -ForegroundColor Green
+    }
 }
 Export-ModuleMember -Function Add-Table
 
@@ -205,11 +220,11 @@ Function Add-VerticalTable{
         [string]$Caption="",
         [string]$CustomCSS=""
     )    
-    $Table =  $HashTable.getEnumerator() | foreach { new-object -typename psobject -property @{Item = $_.name ; Configuration = $_.value } } | Select Item, Configuration
-    Write-Host "Adding Vertial Table..." -NoNewline
     $script:index++
+    Write-Host "[$script:index]Adding Vertial Table..." -NoNewline
+    $Table =  $HashTable.getEnumerator() | foreach { new-object -typename psobject -property @{Item = $_.name ; Configuration = $_.value } } | Select Item, Configuration 
     Add-Metadata -File "$index.csv" -Type "VerticalTable" -Title $Title -Caption $Caption -CustomCSS $CustomCSS -Level $Level -Description $Description
-    $Table | ConvertTo-Csv -NoTypeInformation | Out-File -FilePath "$ReportDirectory\$index.csv"
+    $Table | ConvertTo-Csv -NoTypeInformation | Out-File -FilePath "$script:ReportDirectory\$index.csv"
     Write-Host "Done" -ForegroundColor Green
 }
 Export-ModuleMember -Function Add-VerticalTable
@@ -224,9 +239,9 @@ Function Add-Code{
         [string]$Caption="",
         [string]$Language="",
         [string]$CustomCSS=""
-    )    
-    Write-Host "Adding Code..." -NoNewline
-    $script:index++
+    ) 
+    $script:index++   
+    Write-Host "[$script:index]Adding Code..." -NoNewline
     Add-Metadata -File "$index.txt" -Type "Code" -Title $Title -Level $Level -Caption $Caption -CustomCSS $CustomCSS -Language $Language -Description $Description
     $Code | Out-File -FilePath "$ReportDirectory\$index.txt"
     Write-Host "Done" -ForegroundColor Green
@@ -288,7 +303,7 @@ function Get-Package{
         $ReportZip = $ReportDirectory + ".zip"
         Read-S3Object -BucketName $AWSBucket -Key $Package -File $PackageZip -AccessKey $AccessKey -SecretKey $SecretKey
         Add-Type -assembly "system.io.compression.filesystem"
-        [io.compression.zipfile]::ExtractToDirectory($PackageZipDirectory,$PackageDirectory)
+        $Extract = [io.compression.zipfile]::ExtractToDirectory($PackageZipDirectory,$PackageDirectory)
     }else{
         Write-Host "OFFLINE MODE" -ForegroundColor Magenta
         #offline testing
@@ -302,8 +317,5 @@ function Get-Package{
     }
 }
 Export-ModuleMember -Function Get-Package
-
-
-
 
 #endregion
